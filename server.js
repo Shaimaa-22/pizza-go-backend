@@ -6,7 +6,7 @@ const authRoutes = require("./routes/auth")
 const orderRoutes = require("./routes/orders")
 const paymentRoutes = require("./routes/payment")
 
-const db = require("./db") 
+const db = require("./db")
 
 const app = express()
 
@@ -31,8 +31,7 @@ app.use("/auth", authRoutes)
 app.use("/orders", orderRoutes)
 app.use("/payment", paymentRoutes)
 
-
-// 🔥 إنشاء الجداول
+// إنشاء الجداول والبيانات الأولية
 async function createTables() {
   try {
     await db.query(`
@@ -46,13 +45,6 @@ async function createTables() {
     `)
 
     await db.query(`
-      CREATE TABLE IF NOT EXISTS toppings (
-        topping_id SERIAL PRIMARY KEY,
-        topping_name VARCHAR(50) UNIQUE NOT NULL
-      );
-    `)
-
-    await db.query(`
       CREATE TABLE IF NOT EXISTS orders (
         order_id SERIAL PRIMARY KEY,
         user_id INT REFERENCES users(user_id) ON DELETE SET NULL,
@@ -61,6 +53,13 @@ async function createTables() {
         payment_status VARCHAR(20) DEFAULT 'pending',
         order_status VARCHAR(20) DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `)
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS toppings (
+        topping_id SERIAL PRIMARY KEY,
+        topping_name VARCHAR(50) UNIQUE NOT NULL
       );
     `)
 
@@ -83,14 +82,36 @@ async function createTables() {
       );
     `)
 
-    console.log("Tables created successfully ✅")
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS app_settings (
+        id SERIAL PRIMARY KEY,
+        setting_key VARCHAR(255) UNIQUE NOT NULL,
+        setting_value TEXT NOT NULL,
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+    `)
+
+    await db.query(`
+      INSERT INTO toppings (topping_name)
+      VALUES ('Olive'), ('Mushroom'), ('Tomato')
+      ON CONFLICT (topping_name) DO NOTHING;
+    `)
+
+    await db.query(`
+      INSERT INTO app_settings (setting_key, setting_value)
+      VALUES 
+        ('dough_count', '100'),
+        ('total_revenue', '0')
+      ON CONFLICT (setting_key) DO NOTHING;
+    `)
+
+    console.log("Tables and initial data created successfully ✅")
   } catch (err) {
     console.error("Error creating tables ❌", err)
   }
 }
 
 createTables()
-
 
 const PORT = process.env.PORT || 3000
 app.listen(PORT, "0.0.0.0", () => {
