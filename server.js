@@ -6,6 +6,7 @@ const orderRoutes = require("./routes/orders")
 const paymentRoutes = require("./routes/payment")
 const axios = require("axios")
 const db = require("./db")
+const aiRoutes = require("./routes/ai");
 
 const app = express()
 
@@ -73,6 +74,7 @@ Keep replies short, friendly, and simple.
 app.use("/auth", authRoutes)
 app.use("/orders", orderRoutes)
 app.use("/payment", paymentRoutes)
+app.use("/ai", aiRoutes);
 
 // إنشاء الجداول والبيانات الأولية
 async function createTables() {
