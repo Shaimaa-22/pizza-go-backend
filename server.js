@@ -1,12 +1,13 @@
 const express = require("express")
 const bodyParser = require("body-parser")
 const cors = require("cors")
+
 const authRoutes = require("./routes/auth")
 const orderRoutes = require("./routes/orders")
 const paymentRoutes = require("./routes/payment")
-const axios = require("axios")
+const aiRoutes = require("./routes/ai")
+
 const db = require("./db")
-const aiRoutes = require("./routes/ai");
 
 const app = express()
 
@@ -14,7 +15,7 @@ app.use(
   cors({
     origin: process.env.FRONTEND_URL || "*",
     credentials: true,
-  }),
+  })
 )
 
 app.use(bodyParser.json())
@@ -27,54 +28,10 @@ app.get("/", (req, res) => {
   })
 })
 
-app.post("/ai/ask", async (req, res) => {
-  try {
-    const userMessage = req.body.message
-
-    if (!userMessage) {
-      return res.status(400).json({ error: "Message is required" })
-    }
-
-    const response = await axios.post(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        model: "openai/gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: `
-You are PizzaGo voice assistant.
-You help customers order pizza.
-Available toppings are: Olive, Mushroom, Tomato.
-If the user asks for unavailable toppings, say it is not available.
-Keep replies short, friendly, and simple.
-`
-          },
-          {
-            role: "user",
-            content: userMessage
-          }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PIZZA_GO}`,
-          "Content-Type": "application/json"
-        }
-      }
-    )
-
-    const reply = response.data.choices[0].message.content
-    res.json({ reply })
-  } catch (error) {
-    console.error("AI error:", error.response?.data || error.message)
-    res.status(500).json({ error: "AI assistant failed" })
-  }
-})
 app.use("/auth", authRoutes)
 app.use("/orders", orderRoutes)
 app.use("/payment", paymentRoutes)
-app.use("/ai", aiRoutes);
+app.use("/ai", aiRoutes)
 
 // إنشاء الجداول والبيانات الأولية
 async function createTables() {
@@ -159,6 +116,7 @@ async function createTables() {
 createTables()
 
 const PORT = process.env.PORT || 3000
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`[v0] Server running on port ${PORT}`)
   console.log(`[v0] Environment: ${process.env.NODE_ENV || "development"}`)
