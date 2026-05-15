@@ -95,8 +95,8 @@ async function createTables() {
 
     await db.query(`
       INSERT INTO toppings (topping_name)
-      VALUES ('Olive'), ('Mushroom'), ('Tomato')
-      ON CONFLICT (topping_name) DO NOTHING;
+VALUES ('Olive'), ('Mushroom'), ('Tomato'), ('Sauce')
+ON CONFLICT (topping_name) DO NOTHING;
     `)
 
     await db.query(`
