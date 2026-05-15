@@ -70,11 +70,11 @@ router.post("/create", auth, async(req, res) => {
 
         // 3) Create esp32 command payload
         const espPayload = {
-            order_id,
-            cheese: 1,
-            sauce: 1,
-            ...toppings,
-        }
+    order_id,
+    ...toppings,
+    cheese: 1,
+    sauce: toppings.sauce ? 1 : 0,
+}
 
         // 4) Insert to esp32_commands
         const espQ = `INSERT INTO esp32_commands (order_id, command_payload, sent_to_esp) VALUES ($1,$2,$3) RETURNING command_id`
