@@ -6,8 +6,7 @@ const authRoutes = require("./routes/auth")
 const orderRoutes = require("./routes/orders")
 const paymentRoutes = require("./routes/payment")
 const aiRoutes = require("./routes/ai")
-const startMqttStatusListener = require("./mqttStatus");
-
+const startMqttStatusListener = require("./routes/mqttStatus");
 const db = require("./db")
 
 const app = express()
