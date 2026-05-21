@@ -178,7 +178,11 @@ router.post("/create", auth, async (req, res) => {
 
       cheese: 1,
 
-      sauce: toppings.sauce ? 1 : 0,
+sauce:
+  toppings.sauce ||
+  toppings.Sauce
+    ? 1
+    : 0,
     }
 
     /* =========================
