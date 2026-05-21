@@ -1,5 +1,5 @@
 const mqtt = require("mqtt");
-const db = require("./db");
+const db = require("../db");
 
 const MQTT_BROKER = process.env.MQTT_BROKER || "mqtt://broker.hivemq.com";
 const MQTT_STATUS_TOPIC = process.env.MQTT_STATUS_TOPIC || "pizza/status";
