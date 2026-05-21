@@ -6,6 +6,7 @@ const authRoutes = require("./routes/auth")
 const orderRoutes = require("./routes/orders")
 const paymentRoutes = require("./routes/payment")
 const aiRoutes = require("./routes/ai")
+const startMqttStatusListener = require("./mqttStatus");
 
 const db = require("./db")
 
@@ -113,7 +114,9 @@ ON CONFLICT (topping_name) DO NOTHING;
   }
 }
 
-createTables()
+createTables().then(() => {
+  startMqttStatusListener()
+})
 
 const PORT = process.env.PORT || 3000
 
