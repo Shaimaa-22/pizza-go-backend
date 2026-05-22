@@ -2,20 +2,9 @@ const express = require("express")
 const router = express.Router()
 const db = require("../db")
 const auth = require("../middleware/auth")
-const mqtt = require("mqtt")
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY)
 
-const MQTT_BROKER =
-  process.env.MQTT_BROKER || "mqtt://broker.hivemq.com"
-
-const MQTT_TOPIC =
-  process.env.MQTT_TOPIC || "pizza/orders"
-
-const mqttClient = mqtt.connect(MQTT_BROKER)
-
-mqttClient.on("connect", () => {
-  console.log("Connected to MQTT broker ✅")
-})
+const { processNextOrder } = require("../services/orderQueue")
 
 /* =========================
    GET TOPPINGS
@@ -65,9 +54,7 @@ router.post("/create", auth, async (req, res) => {
 
     if (payment_intent_id) {
       const paymentIntent =
-        await stripe.paymentIntents.retrieve(
-          payment_intent_id
-        )
+        await stripe.paymentIntents.retrieve(payment_intent_id)
 
       if (paymentIntent.status !== "succeeded") {
         return res.status(400).json({
@@ -75,8 +62,7 @@ router.post("/create", auth, async (req, res) => {
         })
       }
 
-      const expectedAmount =
-        Math.round(total_price * 100)
+      const expectedAmount = Math.round(total_price * 100)
 
       if (paymentIntent.amount !== expectedAmount) {
         return res.status(400).json({
@@ -90,7 +76,7 @@ router.post("/create", auth, async (req, res) => {
     }
 
     /* =========================
-       INSERT ORDER
+       INSERT ORDER AS QUEUED
     ========================= */
 
     const orderQ = `
@@ -108,7 +94,7 @@ router.post("/create", auth, async (req, res) => {
         $2,
         $3,
         'success',
-        'paid'
+        'queued'
       )
       RETURNING order_id, created_at
     `
@@ -119,16 +105,13 @@ router.post("/create", auth, async (req, res) => {
       total_price,
     ])
 
-    const order_id =
-      orderRes.rows[0].order_id
+    const order_id = orderRes.rows[0].order_id
 
     /* =========================
        INSERT TOPPINGS
     ========================= */
 
-    for (const [name, val] of Object.entries(
-      toppings
-    )) {
+    for (const [name, val] of Object.entries(toppings)) {
       if (
         name.toLowerCase() === "cheese" ||
         name.toLowerCase() === "sauce"
@@ -139,14 +122,13 @@ router.post("/create", auth, async (req, res) => {
       const tQ = `
         SELECT topping_id
         FROM toppings
-        WHERE LOWER(topping_name)=LOWER($1)
+        WHERE LOWER(topping_name) = LOWER($1)
       `
 
       const tRes = await db.query(tQ, [name])
 
       if (tRes.rows.length > 0) {
-        const topping_id =
-          tRes.rows[0].topping_id
+        const topping_id = tRes.rows[0].topping_id
 
         await db.query(
           `
@@ -156,13 +138,9 @@ router.post("/create", auth, async (req, res) => {
             topping_id,
             topping_value
           )
-          VALUES ($1,$2,$3)
+          VALUES ($1, $2, $3)
           `,
-          [
-            order_id,
-            topping_id,
-            val ? true : false,
-          ]
+          [order_id, topping_id, val ? true : false]
         )
       }
     }
@@ -173,20 +151,13 @@ router.post("/create", auth, async (req, res) => {
 
     const espPayload = {
       order_id,
-
       ...toppings,
-
       cheese: 1,
-
-sauce:
-  toppings.sauce ||
-  toppings.Sauce
-    ? 1
-    : 0,
+      sauce: toppings.sauce || toppings.Sauce ? 1 : 0,
     }
 
     /* =========================
-       SAVE COMMAND
+       SAVE COMMAND ONLY
     ========================= */
 
     const espQ = `
@@ -196,53 +167,24 @@ sauce:
         command_payload,
         sent_to_esp
       )
-      VALUES ($1,$2,$3)
+      VALUES ($1, $2, false)
       RETURNING command_id
     `
 
-    const espRes = await db.query(espQ, [
+    await db.query(espQ, [
       order_id,
       JSON.stringify(espPayload),
-      false,
     ])
 
-    const command_id =
-      espRes.rows[0].command_id
-
     /* =========================
-       SEND MQTT
+       START QUEUE
     ========================= */
 
-    mqttClient.publish(
-      MQTT_TOPIC,
-      JSON.stringify(espPayload),
-      { qos: 1 },
-
-      async (err) => {
-        if (err) {
-          console.error(
-            "MQTT publish error ❌",
-            err
-          )
-        } else {
-          await db.query(
-            `
-            UPDATE esp32_commands
-            SET
-              sent_to_esp = true,
-              sent_at = NOW()
-            WHERE command_id = $1
-            `,
-            [command_id]
-          )
-        }
-      }
-    )
+    processNextOrder()
 
     res.json({
       order_id,
-      message:
-        "Order saved and sent to ESP32",
+      message: "Order saved in queue",
     })
   } catch (err) {
     console.error(err)
@@ -257,49 +199,39 @@ sauce:
    GET ORDER STATUS
 ========================= */
 
-router.get(
-  "/status/:orderId",
-  auth,
-  async (req, res) => {
-    try {
-      const orderId =
-        req.params.orderId
+router.get("/status/:orderId", auth, async (req, res) => {
+  try {
+    const orderId = req.params.orderId
+    const userId = req.user.user_id
 
-      const userId =
-        req.user.user_id
+    const result = await db.query(
+      `
+      SELECT
+        order_id,
+        order_status,
+        payment_status,
+        created_at
+      FROM orders
+      WHERE order_id = $1
+      AND user_id = $2
+      `,
+      [orderId, userId]
+    )
 
-      const result = await db.query(
-        `
-        SELECT
-          order_id,
-          order_status,
-          payment_status,
-          created_at
-        FROM orders
-        WHERE order_id = $1
-        AND user_id = $2
-        `,
-        [orderId, userId]
-      )
-
-      if (result.rows.length === 0) {
-        return res.status(404).json({
-          error: "Order not found",
-        })
-      }
-
-      res.json(result.rows[0])
-    } catch (err) {
-      console.error(
-        "Get order status error ❌",
-        err
-      )
-
-      res.status(500).json({
-        error: "Server error",
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        error: "Order not found",
       })
     }
+
+    res.json(result.rows[0])
+  } catch (err) {
+    console.error("Get order status error ❌", err)
+
+    res.status(500).json({
+      error: "Server error",
+    })
   }
-)
+})
 
 module.exports = router
