@@ -10,6 +10,11 @@ const MQTT_TOPIC =
 const mqttClient = mqtt.connect(MQTT_BROKER)
 
 let machineBusy = false
+let currentOrderId = null
+let lastStatusAt = null
+
+const ORDER_TIMEOUT = 5 * 60 * 1000 // 5 minutes
+const CHECK_INTERVAL = 30 * 1000 // 30 seconds
 
 mqttClient.on("connect", () => {
   console.log("Queue MQTT connected ✅")
@@ -35,7 +40,10 @@ async function processNextOrder() {
     if (result.rows.length === 0) return
 
     const command = result.rows[0]
+
     machineBusy = true
+    currentOrderId = command.order_id
+    lastStatusAt = Date.now()
 
     mqttClient.publish(
       MQTT_TOPIC,
@@ -44,6 +52,8 @@ async function processNextOrder() {
       async (err) => {
         if (err) {
           machineBusy = false
+          currentOrderId = null
+          lastStatusAt = null
           console.error("MQTT publish error ❌", err)
           return
         }
@@ -71,16 +81,56 @@ async function processNextOrder() {
     )
   } catch (err) {
     machineBusy = false
+    currentOrderId = null
+    lastStatusAt = null
     console.error("Queue error ❌", err)
   }
 }
 
+function updateMachineActivity(orderId = null) {
+  if (currentOrderId && orderId && Number(orderId) !== Number(currentOrderId)) {
+    return
+  }
+
+  lastStatusAt = Date.now()
+}
+
 function releaseMachine() {
   machineBusy = false
+  currentOrderId = null
+  lastStatusAt = null
   processNextOrder()
 }
+
+setInterval(async () => {
+  if (!machineBusy || !currentOrderId || !lastStatusAt) return
+
+  const diff = Date.now() - lastStatusAt
+
+  if (diff > ORDER_TIMEOUT) {
+    try {
+      await db.query(
+        `
+        UPDATE orders
+        SET order_status = 'error'
+        WHERE order_id = $1
+        `,
+        [currentOrderId]
+      )
+
+      console.error(
+        `Order ${currentOrderId} timed out ❌ Machine released`
+      )
+
+      releaseMachine()
+    } catch (err) {
+      console.error("Timeout handler error ❌", err)
+    }
+  }
+}, CHECK_INTERVAL)
 
 module.exports = {
   processNextOrder,
   releaseMachine,
+  updateMachineActivity,
 }
