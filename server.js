@@ -7,6 +7,7 @@ const orderRoutes = require("./routes/orders")
 const paymentRoutes = require("./routes/payment")
 const aiRoutes = require("./routes/ai")
 const startMqttStatusListener = require("./routes/mqttStatus");
+const machineRoutes = require("./routes/mqttHeartbeat")
 const db = require("./db")
 
 const app = express()
@@ -32,6 +33,7 @@ app.use("/auth", authRoutes)
 app.use("/orders", orderRoutes)
 app.use("/payment", paymentRoutes)
 app.use("/ai", aiRoutes)
+app.use("/machine", machineRoutes)
 
 // إنشاء الجداول والبيانات الأولية
 async function createTables() {
