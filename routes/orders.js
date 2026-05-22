@@ -3,9 +3,7 @@ const router = express.Router()
 const db = require("../db")
 const auth = require("../middleware/auth")
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY)
-
-const { processNextOrder } = require("../services/orderQueue")
-
+const { processNextOrder } = require("./orderQueue")
 /* =========================
    GET TOPPINGS
 ========================= */
