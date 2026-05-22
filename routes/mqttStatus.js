@@ -1,7 +1,9 @@
 const mqtt = require("mqtt");
 const db = require("../db");
+
 const {
   releaseMachine,
+  updateMachineActivity,
 } = require("./orderQueue");
 
 const MQTT_BROKER =
@@ -31,92 +33,57 @@ function startMqttStatusListener() {
     client.subscribe(
       MQTT_STATUS_TOPIC,
       { qos: 1 },
-
       (err) => {
         if (err) {
-          console.error(
-            "MQTT status subscribe error ❌",
-            err
-          );
+          console.error("MQTT status subscribe error ❌", err);
         } else {
-          console.log(
-            `Subscribed to ${MQTT_STATUS_TOPIC}`
-          );
+          console.log(`Subscribed to ${MQTT_STATUS_TOPIC}`);
         }
       }
     );
   });
 
-  client.on(
-    "message",
-    async (topic, message) => {
-      try {
-        const data = JSON.parse(
-          message.toString()
-        );
+  client.on("message", async (topic, message) => {
+    try {
+      const data = JSON.parse(message.toString());
 
-        const orderId =
-          data.orderId || data.order_id;
+      const orderId = data.orderId || data.order_id;
+      const status = data.status;
+      const statusMessage = data.message || "";
 
-        const status = data.status;
+      if (!orderId || !status) return;
 
-        const statusMessage =
-          data.message || "";
-
-        if (!orderId || !status) return;
-
-        if (
-          !allowedStatuses.includes(status)
-        ) {
-          console.log(
-            "Ignored invalid status:",
-            status
-          );
-
-          return;
-        }
-
-        /* =========================
-           UPDATE ORDER STATUS
-        ========================= */
-
-        await db.query(
-          `
-          UPDATE orders
-          SET order_status = $1
-          WHERE order_id = $2
-          `,
-          [status, orderId]
-        );
-
-        console.log(
-          `Order ${orderId} status updated to ${status}`,
-          statusMessage
-        );
-
-        /* =========================
-           RELEASE QUEUE
-        ========================= */
-
-        if (
-          status === "ready" ||
-          status === "error"
-        ) {
-          console.log(
-            `Machine released from order ${orderId} ✅`
-          );
-
-          releaseMachine();
-        }
-
-      } catch (err) {
-        console.error(
-          "MQTT status message error ❌",
-          err.message
-        );
+      if (!allowedStatuses.includes(status)) {
+        console.log("Ignored invalid status:", status);
+        return;
       }
+
+      // تحديث آخر وقت الماكينة بعتت فيه status
+      // هذا يمنع timeout طالما ESP32 شغال وببعت updates
+      updateMachineActivity(orderId);
+
+      await db.query(
+        `
+        UPDATE orders
+        SET order_status = $1
+        WHERE order_id = $2
+        `,
+        [status, orderId]
+      );
+
+      console.log(
+        `Order ${orderId} status updated to ${status}`,
+        statusMessage
+      );
+
+      if (status === "ready" || status === "error") {
+        console.log(`Machine released from order ${orderId} ✅`);
+        releaseMachine();
+      }
+    } catch (err) {
+      console.error("MQTT status message error ❌", err.message);
     }
-  );
+  });
 }
 
 module.exports = startMqttStatusListener;
