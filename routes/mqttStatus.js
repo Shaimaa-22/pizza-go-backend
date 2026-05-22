@@ -1,9 +1,8 @@
 const mqtt = require("mqtt");
 const db = require("../db");
-
 const {
   releaseMachine,
-} = require("../services/orderQueue");
+} = require("./orderQueue");
 
 const MQTT_BROKER =
   process.env.MQTT_BROKER || "mqtt://broker.hivemq.com";
