@@ -5,8 +5,8 @@ const db = require("../db")
 const auth = require("../middleware/auth")
 
 const {
-  enqueueOrder,
-} = require("../services/orderQueue")
+  processNextOrder,
+} = require("./orderQueue")
 
 /* =========================
    GET TOPPINGS
@@ -152,7 +152,7 @@ router.post(
       )
 
       /* ===== ADD TO MACHINE QUEUE ===== */
-      enqueueOrder(
+      processNextOrder(
         order.order_id
       )
 
