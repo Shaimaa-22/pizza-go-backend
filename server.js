@@ -6,29 +6,16 @@ const authRoutes = require("./routes/auth");
 const orderRoutes = require("./routes/orders");
 const paymentRoutes = require("./routes/payment");
 const aiRoutes = require("./routes/ai");
-
 const startMqttStatusListener = require("./routes/mqttStatus");
 const machineRoutes = require("./routes/mqttHeartbeat");
-
 const db = require("./db");
 
 const app = express();
 
-// =====================================================
-// CORS
-// =====================================================
-
 app.use(cors());
-
-// =====================================================
-// BODY PARSER
-// =====================================================
+app.options("*", cors());
 
 app.use(bodyParser.json());
-
-// =====================================================
-// ROOT
-// =====================================================
 
 app.get("/", (req, res) => {
   res.json({
@@ -38,24 +25,14 @@ app.get("/", (req, res) => {
   });
 });
 
-// =====================================================
-// ROUTES
-// =====================================================
-
 app.use("/auth", authRoutes);
 app.use("/orders", orderRoutes);
 app.use("/payment", paymentRoutes);
 app.use("/ai", aiRoutes);
 app.use("/machine", machineRoutes);
 
-// =====================================================
-// CREATE TABLES
-// =====================================================
-
 async function createTables() {
   try {
-
-    // ================= USERS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS users (
         user_id SERIAL PRIMARY KEY,
@@ -66,7 +43,6 @@ async function createTables() {
       );
     `);
 
-    // ================= ORDERS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS orders (
         order_id SERIAL PRIMARY KEY,
@@ -79,7 +55,6 @@ async function createTables() {
       );
     `);
 
-    // ================= TOPPINGS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS toppings (
         topping_id SERIAL PRIMARY KEY,
@@ -87,7 +62,6 @@ async function createTables() {
       );
     `);
 
-    // ================= ORDER TOPPINGS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS order_toppings (
         order_id INT REFERENCES orders(order_id) ON DELETE CASCADE,
@@ -97,7 +71,6 @@ async function createTables() {
       );
     `);
 
-    // ================= ESP32 COMMANDS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS esp32_commands (
         command_id SERIAL PRIMARY KEY,
@@ -108,7 +81,6 @@ async function createTables() {
       );
     `);
 
-    // ================= SETTINGS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS app_settings (
         id SERIAL PRIMARY KEY,
@@ -118,62 +90,35 @@ async function createTables() {
       );
     `);
 
-    // =================================================
-    // INSERT DEFAULT TOPPINGS
-    // =================================================
-
     await db.query(`
       INSERT INTO toppings (topping_name)
-      VALUES 
-        ('Olive'),
-        ('Mushroom'),
-        ('Tomato'),
-        ('Sauce')
+      VALUES ('Olive'), ('Mushroom'), ('Tomato'), ('Sauce')
       ON CONFLICT (topping_name) DO NOTHING;
     `);
 
-    // =================================================
-    // INSERT DEFAULT SETTINGS
-    // =================================================
-
     await db.query(`
       INSERT INTO app_settings (setting_key, setting_value)
-      VALUES 
-        ('dough_count', '100'),
-        ('total_revenue', '0')
+      VALUES ('dough_count', '100'), ('total_revenue', '0')
       ON CONFLICT (setting_key) DO NOTHING;
     `);
 
     console.log("Tables and initial data created successfully ✅");
-
   } catch (err) {
-
-    console.error("Error creating tables ❌");
-    console.error(err);
+    console.error("Error creating tables ❌", err);
   }
 }
 
-// =====================================================
-// START MQTT LISTENER
-// =====================================================
-
-createTables().then(() => {
-  startMqttStatusListener();
-});
-
-// =====================================================
-// START SERVER
-// =====================================================
+createTables()
+  .then(() => {
+    console.log("Starting MQTT listener...");
+    startMqttStatusListener();
+  })
+  .catch((err) => {
+    console.error("Startup error ❌", err);
+  });
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
-
-  console.log(`[v0] Server running on port ${PORT}`);
-
-  console.log(
-    `[v0] Environment: ${
-      process.env.NODE_ENV || "development"
-    }`
-  );
+  console.log(`Server running on port ${PORT}`);
 });
