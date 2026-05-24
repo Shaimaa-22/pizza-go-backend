@@ -1,88 +1,43 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
+const express = require("express")
+const bodyParser = require("body-parser")
+const cors = require("cors")
 
-const authRoutes = require("./routes/auth");
-const orderRoutes = require("./routes/orders");
-const paymentRoutes = require("./routes/payment");
-const aiRoutes = require("./routes/ai");
-
+const authRoutes = require("./routes/auth")
+const orderRoutes = require("./routes/orders")
+const paymentRoutes = require("./routes/payment")
+const aiRoutes = require("./routes/ai")
 const startMqttStatusListener = require("./routes/mqttStatus");
-const machineRoutes = require("./routes/mqttHeartbeat");
+const machineRoutes = require("./routes/mqttHeartbeat")
+const db = require("./db")
 
-const db = require("./db");
-
-const app = express();
-
-// =====================================================
-// CORS
-// =====================================================
-
-const allowedOrigins = [
-  "http://127.0.0.1:5500",
-  "http://localhost:5500",
-  "https://ornate-pegasus-c04a08.netlify.app",
-  process.env.FRONTEND_URL,
-].filter(Boolean);
+const app = express()
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-
-      // السماح لطلبات Postman أو السيرفر الداخلي
-      if (!origin) {
-        return callback(null, true);
-      }
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      console.log("Blocked by CORS:", origin);
-
-      return callback(new Error("Not allowed by CORS"));
-    },
-
+    origin: process.env.FRONTEND_URL || "*",
     credentials: true,
   })
-);
+)
 
-// =====================================================
-// BODY PARSER
-// =====================================================
-
-app.use(bodyParser.json());
-
-// =====================================================
-// ROOT
-// =====================================================
+app.use(bodyParser.json())
 
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
     message: "Backend API is running",
     timestamp: new Date().toISOString(),
-  });
-});
+  })
+})
 
-// =====================================================
-// ROUTES
-// =====================================================
+app.use("/auth", authRoutes)
+app.use("/orders", orderRoutes)
+app.use("/payment", paymentRoutes)
+app.use("/ai", aiRoutes)
+app.use("/machine", machineRoutes)
 
-app.use("/auth", authRoutes);
-app.use("/orders", orderRoutes);
-app.use("/payment", paymentRoutes);
-app.use("/ai", aiRoutes);
-app.use("/machine", machineRoutes);
-
-// =====================================================
-// CREATE TABLES
-// =====================================================
-
+// إنشاء الجداول والبيانات الأولية
 async function createTables() {
   try {
-
-    // ================= USERS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS users (
         user_id SERIAL PRIMARY KEY,
@@ -91,9 +46,8 @@ async function createTables() {
         password_hash TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
+    `)
 
-    // ================= ORDERS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS orders (
         order_id SERIAL PRIMARY KEY,
@@ -104,17 +58,15 @@ async function createTables() {
         order_status VARCHAR(20) DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
+    `)
 
-    // ================= TOPPINGS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS toppings (
         topping_id SERIAL PRIMARY KEY,
         topping_name VARCHAR(50) UNIQUE NOT NULL
       );
-    `);
+    `)
 
-    // ================= ORDER TOPPINGS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS order_toppings (
         order_id INT REFERENCES orders(order_id) ON DELETE CASCADE,
@@ -122,9 +74,8 @@ async function createTables() {
         topping_value BOOLEAN DEFAULT TRUE,
         PRIMARY KEY (order_id, topping_id)
       );
-    `);
+    `)
 
-    // ================= ESP32 COMMANDS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS esp32_commands (
         command_id SERIAL PRIMARY KEY,
@@ -133,9 +84,8 @@ async function createTables() {
         sent_to_esp BOOLEAN DEFAULT FALSE,
         sent_at TIMESTAMP
       );
-    `);
+    `)
 
-    // ================= SETTINGS =================
     await db.query(`
       CREATE TABLE IF NOT EXISTS app_settings (
         id SERIAL PRIMARY KEY,
@@ -143,25 +93,13 @@ async function createTables() {
         setting_value TEXT NOT NULL,
         updated_at TIMESTAMP DEFAULT NOW()
       );
-    `);
-
-    // =================================================
-    // INSERT DEFAULT TOPPINGS
-    // =================================================
+    `)
 
     await db.query(`
       INSERT INTO toppings (topping_name)
-      VALUES 
-        ('Olive'),
-        ('Mushroom'),
-        ('Tomato'),
-        ('Sauce')
-      ON CONFLICT (topping_name) DO NOTHING;
-    `);
-
-    // =================================================
-    // INSERT DEFAULT SETTINGS
-    // =================================================
+VALUES ('Olive'), ('Mushroom'), ('Tomato'), ('Sauce')
+ON CONFLICT (topping_name) DO NOTHING;
+    `)
 
     await db.query(`
       INSERT INTO app_settings (setting_key, setting_value)
@@ -169,44 +107,21 @@ async function createTables() {
         ('dough_count', '100'),
         ('total_revenue', '0')
       ON CONFLICT (setting_key) DO NOTHING;
-    `);
+    `)
 
-    console.log("Tables and initial data created successfully ✅");
-
+    console.log("Tables and initial data created successfully ✅")
   } catch (err) {
-
-    console.error("Error creating tables ❌");
-    console.error(err);
+    console.error("Error creating tables ❌", err)
   }
 }
 
-// =====================================================
-// START MQTT LISTENER
-// =====================================================
-
 createTables().then(() => {
-  startMqttStatusListener();
-});
+  startMqttStatusListener()
+})
 
-// =====================================================
-// START SERVER
-// =====================================================
-
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000
 
 app.listen(PORT, "0.0.0.0", () => {
-
-  console.log(`[v0] Server running on port ${PORT}`);
-
-  console.log(
-    `[v0] Environment: ${
-      process.env.NODE_ENV || "development"
-    }`
-  );
-
-  console.log("[v0] Allowed origins:");
-
-  allowedOrigins.forEach((origin) => {
-    console.log(" -", origin);
-  });
-});
+  console.log(`[v0] Server running on port ${PORT}`)
+  console.log(`[v0] Environment: ${process.env.NODE_ENV || "development"}`)
+})
