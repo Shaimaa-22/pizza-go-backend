@@ -1,36 +1,41 @@
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
+const express = require("express")
+const bodyParser = require("body-parser")
+const cors = require("cors")
 
-const authRoutes = require("./routes/auth");
-const orderRoutes = require("./routes/orders");
-const paymentRoutes = require("./routes/payment");
-const aiRoutes = require("./routes/ai");
+const authRoutes = require("./routes/auth")
+const orderRoutes = require("./routes/orders")
+const paymentRoutes = require("./routes/payment")
+const aiRoutes = require("./routes/ai")
 const startMqttStatusListener = require("./routes/mqttStatus");
-const machineRoutes = require("./routes/mqttHeartbeat");
-const db = require("./db");
+const machineRoutes = require("./routes/mqttHeartbeat")
+const db = require("./db")
 
-const app = express();
+const app = express()
 
-app.use(cors());
-app.options("*", cors());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || "*",
+    credentials: true,
+  })
+)
 
-app.use(bodyParser.json());
+app.use(bodyParser.json())
 
 app.get("/", (req, res) => {
   res.json({
     status: "ok",
     message: "Backend API is running",
     timestamp: new Date().toISOString(),
-  });
-});
+  })
+})
 
-app.use("/auth", authRoutes);
-app.use("/orders", orderRoutes);
-app.use("/payment", paymentRoutes);
-app.use("/ai", aiRoutes);
-app.use("/machine", machineRoutes);
+app.use("/auth", authRoutes)
+app.use("/orders", orderRoutes)
+app.use("/payment", paymentRoutes)
+app.use("/ai", aiRoutes)
+app.use("/machine", machineRoutes)
 
+// إنشاء الجداول والبيانات الأولية
 async function createTables() {
   try {
     await db.query(`
@@ -41,7 +46,7 @@ async function createTables() {
         password_hash TEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
+    `)
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS orders (
@@ -53,14 +58,14 @@ async function createTables() {
         order_status VARCHAR(20) DEFAULT 'pending',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `);
+    `)
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS toppings (
         topping_id SERIAL PRIMARY KEY,
         topping_name VARCHAR(50) UNIQUE NOT NULL
       );
-    `);
+    `)
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS order_toppings (
@@ -69,7 +74,7 @@ async function createTables() {
         topping_value BOOLEAN DEFAULT TRUE,
         PRIMARY KEY (order_id, topping_id)
       );
-    `);
+    `)
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS esp32_commands (
@@ -79,7 +84,7 @@ async function createTables() {
         sent_to_esp BOOLEAN DEFAULT FALSE,
         sent_at TIMESTAMP
       );
-    `);
+    `)
 
     await db.query(`
       CREATE TABLE IF NOT EXISTS app_settings (
@@ -88,37 +93,35 @@ async function createTables() {
         setting_value TEXT NOT NULL,
         updated_at TIMESTAMP DEFAULT NOW()
       );
-    `);
+    `)
 
     await db.query(`
       INSERT INTO toppings (topping_name)
-      VALUES ('Olive'), ('Mushroom'), ('Tomato'), ('Sauce')
-      ON CONFLICT (topping_name) DO NOTHING;
-    `);
+VALUES ('Olive'), ('Mushroom'), ('Tomato'), ('Sauce')
+ON CONFLICT (topping_name) DO NOTHING;
+    `)
 
     await db.query(`
       INSERT INTO app_settings (setting_key, setting_value)
-      VALUES ('dough_count', '100'), ('total_revenue', '0')
+      VALUES 
+        ('dough_count', '100'),
+        ('total_revenue', '0')
       ON CONFLICT (setting_key) DO NOTHING;
-    `);
+    `)
 
-    console.log("Tables and initial data created successfully ✅");
+    console.log("Tables and initial data created successfully ✅")
   } catch (err) {
-    console.error("Error creating tables ❌", err);
+    console.error("Error creating tables ❌", err)
   }
 }
 
-createTables()
-  .then(() => {
-    console.log("Starting MQTT listener...");
-    startMqttStatusListener();
-  })
-  .catch((err) => {
-    console.error("Startup error ❌", err);
-  });
+createTables().then(() => {
+  startMqttStatusListener()
+})
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Server running on port ${PORT}`);
-});
+  console.log(`[v0] Server running on port ${PORT}`)
+  console.log(`[v0] Environment: ${process.env.NODE_ENV || "development"}`)
+})
