@@ -52,8 +52,8 @@ router.post(
   async (req, res) => {
 
     const client =
-  await db.pool.connect()
-    
+      await db.pool.connect()
+
     try {
 
       const userId =
@@ -146,6 +146,28 @@ router.post(
           }
         }
       }
+
+      /* ===== SAVE MACHINE COMMAND ===== */
+      await client.query(
+        `
+        INSERT INTO esp32_commands
+        (
+          order_id,
+          command_payload
+        )
+        VALUES
+        ($1, $2)
+        `,
+        [
+          order.order_id,
+          JSON.stringify({
+            orderId:
+              order.order_id,
+            pizza_size,
+            toppings,
+          }),
+        ]
+      )
 
       await client.query(
         "COMMIT"
