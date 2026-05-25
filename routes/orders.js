@@ -52,8 +52,8 @@ router.post(
   async (req, res) => {
 
     const client =
-      await db.connect()
-
+  await db.pool.connect()
+    
     try {
 
       const userId =
