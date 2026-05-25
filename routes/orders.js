@@ -6,7 +6,7 @@ const auth = require("../middleware/auth")
 
 const {
   enqueueOrder,
-} = require("../services/orderQueue")
+} = require("./orderQueue")
 
 /* =========================
    GET TOPPINGS
