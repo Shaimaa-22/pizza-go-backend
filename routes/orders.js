@@ -5,8 +5,8 @@ const db = require("../db")
 const auth = require("../middleware/auth")
 
 const {
-  processNextOrder,
-} = require("./orderQueue")
+  enqueueOrder,
+} = require("../services/orderQueue")
 
 /* =========================
    GET TOPPINGS
@@ -51,7 +51,9 @@ router.post(
   auth,
   async (req, res) => {
 
- const client = await db.pool.connect()
+    const client =
+      await db.connect()
+
     try {
 
       const userId =
@@ -150,7 +152,7 @@ router.post(
       )
 
       /* ===== ADD TO MACHINE QUEUE ===== */
-      processNextOrder(
+      enqueueOrder(
         order.order_id
       )
 
