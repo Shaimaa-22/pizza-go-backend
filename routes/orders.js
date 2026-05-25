@@ -231,5 +231,38 @@ router.get("/status/:orderId", auth, async (req, res) => {
     })
   }
 })
+/* =========================
+   GET MY ORDERS
+========================= */
+
+router.get("/my-orders", auth, async (req, res) => {
+  try {
+    const userId = req.user.user_id
+
+    const result = await db.query(
+      `
+      SELECT
+        order_id,
+        pizza_size,
+        total_price,
+        payment_status,
+        order_status,
+        created_at
+      FROM orders
+      WHERE user_id = $1
+      ORDER BY created_at DESC
+      `,
+      [userId]
+    )
+
+    res.json(result.rows)
+  } catch (err) {
+    console.error("Get my orders error ❌", err)
+
+    res.status(500).json({
+      error: "Server error",
+    })
+  }
+})
 
 module.exports = router
