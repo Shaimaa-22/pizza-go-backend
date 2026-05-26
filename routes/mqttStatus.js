@@ -13,77 +13,127 @@ const MQTT_STATUS_TOPIC =
   process.env.MQTT_STATUS_TOPIC || "pizza/status";
 
 const allowedStatuses = [
-  "paid",
   "queued",
   "dough",
   "sauce",
-  "cheese",
   "toppings",
+  "cheese",
   "heating",
   "ready",
   "error",
 ];
 
 function startMqttStatusListener() {
+
   const client = mqtt.connect(MQTT_BROKER);
 
   client.on("connect", () => {
+
     console.log("MQTT status listener connected ✅");
 
     client.subscribe(
       MQTT_STATUS_TOPIC,
       { qos: 1 },
+
       (err) => {
+
         if (err) {
-          console.error("MQTT status subscribe error ❌", err);
+
+          console.error(
+            "MQTT status subscribe error ❌",
+            err
+          );
+
         } else {
-          console.log(`Subscribed to ${MQTT_STATUS_TOPIC}`);
+
+          console.log(
+            `Subscribed to ${MQTT_STATUS_TOPIC}`
+          );
         }
       }
     );
   });
 
-  client.on("message", async (topic, message) => {
-    try {
-      const data = JSON.parse(message.toString());
+  client.on(
+    "message",
 
-      const orderId = data.orderId || data.order_id;
-      const status = data.status;
-      const statusMessage = data.message || "";
+    async (topic, message) => {
 
-      if (!orderId || !status) return;
+      try {
 
-      if (!allowedStatuses.includes(status)) {
-        console.log("Ignored invalid status:", status);
-        return;
+        const data = JSON.parse(
+          message.toString()
+        );
+
+        const orderId =
+          data.orderId || data.order_id;
+
+        const status = data.status;
+
+        const statusMessage =
+          data.message || "";
+
+        if (!orderId || !status) {
+
+          console.log(
+            "Invalid MQTT payload ❌"
+          );
+
+          return;
+        }
+
+        // تجاهل statuses غير المسموحة
+        if (!allowedStatuses.includes(status)) {
+
+          console.log(
+            "Ignored invalid status:",
+            status
+          );
+
+          return;
+        }
+
+        // تحديث آخر activity للماكينة
+        updateMachineActivity(orderId);
+
+        // تحديث حالة الطلب
+        await db.query(
+          `
+          UPDATE orders
+          SET order_status = $1
+          WHERE order_id = $2
+          `,
+          [status, orderId]
+        );
+
+        console.log(
+          `Order ${orderId} status updated to ${status}`,
+          statusMessage
+        );
+
+        // إذا خلص الطلب أو صار error
+        // حرر الماكينة
+        if (
+          status === "ready" ||
+          status === "error"
+        ) {
+
+          console.log(
+            `Machine released from order ${orderId} ✅`
+          );
+
+          releaseMachine();
+        }
+
+      } catch (err) {
+
+        console.error(
+          "MQTT status message error ❌",
+          err.message
+        );
       }
-
-      // تحديث آخر وقت الماكينة بعتت فيه status
-      // هذا يمنع timeout طالما ESP32 شغال وببعت updates
-      updateMachineActivity(orderId);
-
-      await db.query(
-        `
-        UPDATE orders
-        SET order_status = $1
-        WHERE order_id = $2
-        `,
-        [status, orderId]
-      );
-
-      console.log(
-        `Order ${orderId} status updated to ${status}`,
-        statusMessage
-      );
-
-      if (status === "ready" || status === "error") {
-        console.log(`Machine released from order ${orderId} ✅`);
-        releaseMachine();
-      }
-    } catch (err) {
-      console.error("MQTT status message error ❌", err.message);
     }
-  });
+  );
 }
 
 module.exports = startMqttStatusListener;
