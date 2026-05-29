@@ -95,11 +95,16 @@ async function createTables() {
       );
     `)
 
-    await db.query(`
-      INSERT INTO toppings (topping_name)
-VALUES ('Olive'), ('Mushroom'), ('Tomato'), ('Sauce')
-ON CONFLICT (topping_name) DO NOTHING;
-    `)
+   await db.query(`
+  DELETE FROM toppings
+  WHERE topping_name IN ('Mushroom', 'Tomato');
+`)
+
+await db.query(`
+  INSERT INTO toppings (topping_name)
+  VALUES ('Sauce'), ('Olive'), ('Sweet Pepper'), ('Corn')
+  ON CONFLICT (topping_name) DO NOTHING;
+`)
 
     await db.query(`
       INSERT INTO app_settings (setting_key, setting_value)
