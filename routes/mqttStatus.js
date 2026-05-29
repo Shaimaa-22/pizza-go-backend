@@ -15,14 +15,22 @@ const MQTT_STATUS_TOPIC =
 const allowedStatuses = [
   "queued",
   "dough",
+
+  "moving_to_sauce",
   "sauce",
+
+  "moving_to_toppings",
   "toppings",
+
+  "moving_to_cheese",
   "cheese",
+
+  "moving_to_oven",
   "heating",
+
   "ready",
   "error",
 ];
-
 function startMqttStatusListener() {
 
   const client = mqtt.connect(MQTT_BROKER);
